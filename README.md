@@ -14,7 +14,44 @@ WSL は必要に応じて `wsl --update` で更新してください。WSL Conta
 
 スクリプトは PATH 上の `wslc.exe` を探し、見つからなければ `%ProgramFiles%\WSL\wslc.exe` を使用します。別の場所にある場合は `-WslcPath` を指定できます。
 
-## すぐに試す
+## インストール（clone 不要）
+
+Windows の **PowerShell 7.3 以上**で次の 1 行を実行します。
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/uni-kakurenbo/wslc-simple-gcc/main/install.ps1)))
+```
+
+`~/.local/bin/wslc-simple-gcc.ps1` にインストールし、インストール先を現在のセッションと Windows のユーザー PATH に追加します。管理者権限は不要です。ここでの `~` は Windows のユーザープロファイルです。PowerShell からは拡張子を省略して使えます。
+
+```powershell
+wslc-simple-gcc .\main.c
+wslc-simple-gcc .\main.cpp -Standard c++26 -CompilerArgs @('-O2')
+wslc-simple-gcc .\main.cpp -RunArgs @('hello world', '42')
+```
+
+同じインストールコマンドを再実行すると、`main` の最新版へ更新します。既存の `wslc-simple-gcc.ps1` を置き換えますが、同じフォルダー内の他のファイルは変更しません。ダウンロードと構文確認が成功してから置き換えるため、取得に失敗した場合は既存のインストールを維持します。MIT ライセンスの全文はインストールされるスクリプトにも含まれています。
+
+インストール先、PATH の変更、取得するリビジョンも指定できます。
+
+```powershell
+# 別の場所へインストールし、PATH は変更しない
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/uni-kakurenbo/wslc-simple-gcc/main/install.ps1))) `
+    -InstallDirectory 'C:\tools\bin' -NoPath
+
+# 特定のコミット・タグから取得（インストーラー対応後のリビジョンを指定）
+# 同じ呼び出しに -Ref '<commit-sha-or-tag>' を追加
+```
+
+新しいターミナルにもユーザー PATH が反映されます。既に開いていた別のターミナルでコマンドが見つからない場合は、ターミナルアプリを再起動してください。PATH を使わず `& "$HOME/.local/bin/wslc-simple-gcc.ps1" .\main.cpp` と実行することもできます。対応するシェルは PowerShell 7.3 以上です。
+
+アンインストールするには次のファイルを削除します。共有の `~/.local/bin` ディレクトリと PATH の登録は残します。
+
+```powershell
+Remove-Item -LiteralPath "$HOME/.local/bin/wslc-simple-gcc.ps1"
+```
+
+## clone してサンプルを試す
 
 PowerShell 7 で実行します。
 
@@ -104,6 +141,12 @@ WSL Containers が利用できる Windows の PowerShell 7 で実行してくだ
 
 ```powershell
 .\tests\Smoke.Tests.ps1
+
+# インストーラーの確認（ネットワーク・ユーザー PATH の変更なし）
+.\tests\Install.Tests.ps1
+
+# インストールしたスクリプトで実コンテナの検証も行う
+.\tests\Install.Tests.ps1 -RunSmokeTests
 ```
 
 C23・C++23・C++26、複数ソース、インクルードパス、引用符を含む引数、空文字、日本語・空白を含むパス、読み取り専用マウント、終了コードの伝播を実際のコンテナで確認します。テスト用ファイルは無視対象の `.tmp/` に作り、終了時に削除します。テストはイメージ取得・コンテナ起動を行うため、ネットワーク接続とローカルディスクを使用する場合があります。

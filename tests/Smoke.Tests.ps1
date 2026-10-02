@@ -4,13 +4,15 @@
 Run integration checks against real WSL Containers. No test framework is needed.
 #>
 [CmdletBinding()]
-param()
+param(
+    [string] $RunnerPath = (Join-Path (Split-Path $PSScriptRoot -Parent) 'Run-Gcc16.ps1')
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 $repoRoot = Split-Path $PSScriptRoot -Parent
-$runner = Join-Path $repoRoot 'Run-Gcc16.ps1'
+$runner = (Get-Item -LiteralPath $RunnerPath).FullName
 $tempRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot '.tmp'))
 $testRoot = Join-Path $tempRoot ('smoke-' + [guid]::NewGuid().ToString('N'))
 $fixtureRoot = Join-Path $testRoot 'test project 日本語'
