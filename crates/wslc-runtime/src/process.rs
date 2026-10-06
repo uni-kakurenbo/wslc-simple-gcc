@@ -262,8 +262,9 @@ impl Runner<'_> {
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
-            if !interactive {
-                command.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            // Streaming children inherit the parent's console and output handles.
+            if capture && !interactive {
+                command.creation_flags(windows_sys::Win32::System::Threading::CREATE_NO_WINDOW);
             }
         }
 

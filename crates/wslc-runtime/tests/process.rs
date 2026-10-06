@@ -101,6 +101,47 @@ fn cli_reporting_preserves_platform_exit_status_width() {
     assert_eq!(output.code, if cfg!(windows) { 513 } else { 1 });
 }
 
+#[cfg(windows)]
+fn console_processes() -> Vec<u32> {
+    let mut processes = vec![0; 16];
+
+    loop {
+        // SAFETY: the buffer holds the advertised number of writable process IDs.
+        let count = unsafe {
+            windows_sys::Win32::System::Console::GetConsoleProcessList(
+                processes.as_mut_ptr(),
+                processes.len() as u32,
+            )
+        } as usize;
+
+        if count <= processes.len() {
+            processes.truncate(count);
+            return processes;
+        }
+
+        processes.resize(count, 0);
+    }
+}
+
+#[cfg(windows)]
+#[test]
+#[ignore = "requires an attached Windows console; run inside a terminal"]
+fn streaming_children_keep_the_attached_console() {
+    assert!(
+        console_processes().contains(&std::process::id()),
+        "Run this test inside a Windows terminal"
+    );
+
+    let fixture = Fixture::new();
+    let mut child = probe(&fixture, "console", &[]);
+    child.env("WSLC_PROCESS_TEST_PARENT", std::process::id().to_string());
+    let output = Runner { root: &fixture.0 }
+        .run_command(child, Duration::from_secs(10), false)
+        .unwrap();
+
+    assert_eq!(output.code, 0, "Streaming child lost its console or output");
+}
+
 #[test]
 fn process_timeout_terminates_descendants_and_releases_pipes() {
     let fixture = Fixture::new();
@@ -149,6 +190,20 @@ fn process_probe() {
         "wide-exit" => {
             let _ = report(Ok(513));
             panic!("wide exit status was not forwarded to the OS");
+        }
+        #[cfg(windows)]
+        "console" => {
+            let parent = std::env::var("WSLC_PROCESS_TEST_PARENT")
+                .unwrap()
+                .parse()
+                .unwrap();
+            if !console_processes().contains(&parent) {
+                std::process::exit(41);
+            }
+
+            std::io::stdout().write_all(b"streamed stdout\n").unwrap();
+            std::io::stderr().write_all(b"streamed stderr\n").unwrap();
+            std::process::exit(0);
         }
         "tree" => {
             let fixture = Fixture(root);

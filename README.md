@@ -106,6 +106,12 @@ cargo fmt --all -- --check
 cargo clippy --workspace --locked --all-targets -- -D warnings
 ```
 
+端末への出力を継承する子プロセスは、Windows の親コンソールも継承します。この動作の回帰テストは Windows の端末内で実行します。
+
+```sh
+cargo test --locked --package wslc-runtime --test process -- --ignored --exact streaming_children_keep_the_attached_console --nocapture
+```
+
 実際の WSLC を使う統合テストは通常のテストから分離しています。
 
 ```sh
