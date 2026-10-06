@@ -1,0 +1,16 @@
+[package]
+name = "wslc-simple-gcc"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Compile and run C, C++ and assembly in owned WSL containers"
+include = ["Cargo.toml", "src/*.rs", "assets/*.sh", "tests/*.rs"]
+
+[lints]
+workspace = true
+
+[dependencies]
+wslc-runtime.workspace = true

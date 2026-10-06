@@ -1,157 +1,118 @@
 # wslc-simple-gcc
 
-WSL Containers (`wslc.exe`) を使い、Windows の PowerShell から C/C++ を GCC 16 でコンパイルして実行するスクリプトです。
+Windows の WSL Containers を使い、C・C++・アセンブリを GCC 16 でコンパイルして実行する Rust CLI です。Rust から呼び出す API も同じ実装を利用します。
 
-Docker Desktop や `dockerd` は不要です。WSL が管理するサービスと軽量 VM は使用します。生成するのは Linux 用バイナリです。
+ソースの結合やテンプレート変換は行いません。複数ソースは GCC に個別に渡します。
 
 ## 必要な環境
 
-- Windows 上で動作する WSL Containers（WSL 2.9.3 以上）。
-- **PowerShell 7.3 以上**。Windows PowerShell 5.1 には対応していません。
-- 初回のイメージ取得時にコンテナレジストリへのネットワーク接続。
+- x64 Windows と WSL Containers（WSL 2.9.3 以上）。
+- ビルド・インストールには公式の Rust 1.99.0 ツールチェーン。
+- 初回の SDK・GCC イメージ取得にはネットワーク接続。
 
-WSL は必要に応じて `wsl --update` で更新してください。WSL Containers の導入については [Microsoft の公式ドキュメント](https://learn.microsoft.com/en-us/windows/wsl/wsl-container) を参照してください。
+インストール後は Rust、PowerShell、Docker Desktop、ユーザー側の Linux ディストリビューションを必要とせず、実行ファイルを直接呼び出せます。WSL のサービスと軽量 VM は利用します。生成・実行するバイナリは Linux 用です。
 
-スクリプトは PATH 上の `wslc.exe` を探し、見つからなければ `%ProgramFiles%\WSL\wslc.exe` を使用します。別の場所にある場合は `-WslcPath` を指定できます。
+WSL Containers の導入は [Microsoft の公式ドキュメント](https://learn.microsoft.com/en-us/windows/wsl/wsl-container) を参照してください。
 
-## インストール（clone 不要）
+## インストール
 
-Windows の **PowerShell 7.3 以上**で次の 1 行を実行します。
+Rust 1.99 以上の環境で、公開リポジトリからインストールできます。
 
-```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/uni-kakurenbo/wslc-simple-gcc/main/install.ps1)))
+```sh
+cargo install --git https://github.com/uni-kakurenbo/wslc-simple-gcc --locked wslc-simple-gcc
+wslc-simple-gcc --help
+wslc-simple-gcc doctor
 ```
 
-`~/.local/bin/wslc-simple-gcc.ps1` にインストールし、インストール先を現在のセッションと Windows のユーザー PATH に追加します。管理者権限は不要です。ここでの `~` は Windows のユーザープロファイルです。PowerShell からは拡張子を省略して使えます。
+クローンしたリポジトリからは次のようにインストールします。公式ツールチェーンは `rust-toolchain.toml` に固定しています。
 
-```powershell
-wslc-simple-gcc .\main.c
-wslc-simple-gcc .\main.cpp -Standard c++26 -CompilerArgs @('-O2')
-wslc-simple-gcc .\main.cpp -RunArgs @('hello world', '42')
+```sh
+cargo install --path crates/wslc-simple-gcc --locked
 ```
 
-同じインストールコマンドを再実行すると、`main` の最新版へ更新します。既存の `wslc-simple-gcc.ps1` を置き換えますが、同じフォルダー内の他のファイルは変更しません。ダウンロードと構文確認が成功してから置き換えるため、取得に失敗した場合は既存のインストールを維持します。MIT ライセンスの全文はインストールされるスクリプトにも含まれています。
+## コンパイルして実行する
 
-インストール先、PATH の変更、取得するリビジョンも指定できます。
-
-```powershell
-# 別の場所へインストールし、PATH は変更しない
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/uni-kakurenbo/wslc-simple-gcc/main/install.ps1))) `
-    -InstallDirectory 'C:\tools\bin' -NoPath
-
-# 特定のコミット・タグから取得（インストーラー対応後のリビジョンを指定）
-# 同じ呼び出しに -Ref '<commit-sha-or-tag>' を追加
+```sh
+wslc-simple-gcc examples/hello.c
+wslc-simple-gcc examples/hello.cpp --standard c++26 --compiler-arg -O2 -- "hello world" 42
+wslc-simple-gcc main.s
 ```
 
-新しいターミナルにもユーザー PATH が反映されます。既に開いていた別のターミナルでコマンドが見つからない場合は、ターミナルアプリを再起動してください。PATH を使わず `& "$HOME/.local/bin/wslc-simple-gcc.ps1" .\main.cpp` と実行することもできます。対応するシェルは PowerShell 7.3 以上です。
+最初のソースの親ディレクトリを `/src` に読み取り専用でマウントします。ソースは呼び出し元の作業ディレクトリを基準に指定します。複数ソースを含む場合は必要に応じてプロジェクトルートを指定してください。
 
-アンインストールするには次のファイルを削除します。共有の `~/.local/bin` ディレクトリと PATH の登録は残します。
-
-```powershell
-Remove-Item -LiteralPath "$HOME/.local/bin/wslc-simple-gcc.ps1"
+```sh
+wslc-simple-gcc src/main.c src/util.c --project-dir . --compiler-arg -Iinclude --compiler-arg -O2
 ```
 
-## clone してサンプルを試す
+`--compiler-arg` と `--run-arg` は引数ごとに繰り返します。`--` 以降はすべてプログラムの引数です。空白、引用符、空文字を含む値も引数の区切りを保って渡します。
 
-PowerShell 7 で実行します。
-
-```powershell
-git clone https://github.com/uni-kakurenbo/wslc-simple-gcc.git
-Set-Location wslc-simple-gcc
-
-# C23
-.\Run-Gcc16.ps1 .\examples\hello.c
-
-# C++23
-.\Run-Gcc16.ps1 .\examples\hello.cpp
-
-# C++26、最適化、プログラムへの引数
-.\Run-Gcc16.ps1 .\examples\hello.cpp -Standard c++26 `
-    -CompilerArgs @('-O2') -RunArgs @('hello world', '42')
-
-# 直前の実行結果
-$LASTEXITCODE
+```sh
+wslc-simple-gcc examples/hello.cpp --run-arg "hello world" --run-arg "" --run-arg "semi;colon"
+wslc-simple-gcc examples/hello.c --interactive
 ```
 
-実行結果の例：
+## オプション
+
+| オプション | 内容 | 既定値 |
+| --- | --- | --- |
+| `--project-dir` | `/src` にマウントするルート | 最初のソースの親 |
+| `--language` | `auto` / `c` / `cpp` / `asm` | `auto` |
+| `--standard` | GCC の C/C++ 規格名 | `c23` / `c++23` |
+| `--compiler-arg` | コンパイラ・リンカー引数。繰り返し可能 | 空 |
+| `--run-arg` | プログラム引数。繰り返し可能 | 空 |
+| `--image` | GCC 16 と Bash を含む OCI イメージ | `docker.io/library/gcc:16.2.0` |
+| `--cache-dir` | SDK とセッションの保存先 | `%LOCALAPPDATA%/wslc-simple-gcc` |
+| `--wslc` | `wslc.exe` の明示的なパス | PATH、次に `%ProgramFiles%/WSL/wslc.exe` |
+| `--timeout-seconds` | コンパイル・実行の制限時間 | `1800` |
+| `--interactive` | コンソールの標準入力を接続 | 無効 |
+| `--tty` | TTY を割り当て、標準入力を接続 | 無効 |
+
+実際のコンパイラのメジャーバージョンが 16 であることを検査します。コンパイラの情報と SDK・セッションの診断は標準エラー、プログラムの通常出力は標準出力に送ります。コンパイルに失敗した場合はその終了コード、成功した場合はプログラムの終了コードを返します。入力エラーは `2`、実行基盤のエラーは `1` です。
+
+## 実行とキャッシュ
+
+Microsoft.WSL.Containers 3.0.1 の検証済み SDK を必要に応じて取得し、SHA-256 を確認してから DLL を読み込みます。このバージョンの C ABI に固定しています。
+
+各呼び出しが専用セッションを所有し、正常終了・エラー・タイムアウト時に終了と解放を行います。既定セッションや他のアプリのセッションには変更を加えません。同じキャッシュに対する同時操作はロックで防ぎます。CLI 自体を強制終了した場合の SDK による後処理は保証できません。
+
+GCC イメージと SDK はキャッシュに保存します。初回のイメージ取得はディスクと時間を使用します。コンパイル結果はコンテナ内の `/tmp` に作り、`--rm` でコンテナとともに削除します。ホストへの実行ファイルの書き出しは行いません。
+
+プロジェクトはローカル Windows ドライブ上に置き、選択するソースをすべて含める必要があります。UNC パスや WSL のネットワークパスには対応していません。自動判定で C・C++・アセンブリを混在させることはできません。CMake/Make や外部ライブラリの導入は対象外です。
+
+## Rust の責務
 
 ```text
-[GCC 16.2.0 | c++23]
-Hello C++! GCC 16.2.0; __cplusplus=202302; sum=15
+crates/
+  wslc-runtime/
+    src/process.rs      プロセスの入出力・終了コード・タイムアウト
+    src/sdk.rs          HTTPS 取得・ハッシュ検証・SDK キャッシュ
+    src/session.rs      SDK 読み込み・専用セッションの所有権
+    src/container.rs    マウント・引数・コンテナ実行
+  wslc-simple-gcc/
+    src/compile.rs      ソース選択・GCC 引数・コンパイルと実行の API
+    src/native.rs       既存環境での GCC・アセンブリ実行補助
+    src/cli.rs          CLI の引数解析
+    src/main.rs         CLI の入口
+    assets/compile-run.sh  コンテナ内で GCC を呼び出す固定手順
 ```
 
-コンパイラのバージョン表示は標準エラー、プログラムの通常出力は標準出力へ送られます。C++26 の機能サポートは GCC 16 の実装範囲に依存します。
-
-## 自分のコードを実行する
-
-```powershell
-# 単一ソース（パスは呼び出し元の作業ディレクトリが基準）
-.\Run-Gcc16.ps1 'C:\projects\demo\main.cpp'
-
-# 複数ソースとヘッダーを含むプロジェクト
-.\Run-Gcc16.ps1 -Source @('.\src\main.cpp', '.\src\util.cpp') `
-    -ProjectDirectory . -CompilerArgs @('-Iinclude', '-O2', '-pthread')
-
-# 対話入力が必要なプログラム
-.\Run-Gcc16.ps1 .\main.c -Interactive
-
-# 端末が必要なプログラム（Interactive も有効になる）
-.\Run-Gcc16.ps1 .\main.c -Tty
-
-# 引用符・空白・空文字を含む引数
-.\Run-Gcc16.ps1 .\examples\hello.cpp `
-    -RunArgs @('hello world', '', 'quote"test', 'semi;colon')
-```
-
-`-Source` と `-ProjectDirectory` は Windows のパスを受け取ります。`-CompilerArgs` 内のパスはコンテナ内のパスです。たとえば `-Iinclude` は `/src/include` を指します。
-
-## パラメーター
-
-| パラメーター | 内容 | 既定値 |
-| --- | --- | --- |
-| `-Source` | ソースファイルの配列。必須、第 1 位置引数 | — |
-| `-ProjectDirectory` | `/src` にマウントするプロジェクトルート | 最初のソースの親フォルダー |
-| `-Language` | `auto`、`c`、`cpp`。明示すると全ソースをその言語として扱う | `auto` |
-| `-Standard` | `c23`、`c++23`、`c++26` など GCC の言語規格名 | C は `c23`、C++ は `c++23` |
-| `-CompilerArgs` | コンパイラ・リンカーへの追加引数の配列 | 空 |
-| `-RunArgs` | プログラムへの引数の配列 | 空 |
-| `-Image` | GCC 16 と Bash を含む OCI イメージ | `docker.io/library/gcc:16.2.0` |
-| `-WslcPath` | `wslc.exe` の明示的なパス | 自動検出 |
-| `-Interactive` | コンソールの標準入力を接続 | 無効 |
-| `-Tty` | TTY を割り当て、標準入力を接続 | 無効 |
-
-詳しいヘルプは `Get-Help .\Run-Gcc16.ps1 -Full` でも確認できます。
-
-## 動作と制約
-
-- イメージがなければ取得し、以後はローカルキャッシュを使います。更新する場合は `wslc pull docker.io/library/gcc:16.2.0` を実行してください。
-- 実際のコンパイラのメジャーバージョンが 16 であることを実行時に確認します。
-- プロジェクトを `/src` に**読み取り専用**でマウントします。コンパイル・実行時の作業ディレクトリも `/src` です。
-- ビルド結果はコンテナ内の `/tmp` に作り、終了時に `--rm` でコンテナごと削除します。ホストへのバイナリ保存は行いません。プログラムが書き込む一時ファイルにも `/tmp` を使用してください。
-- `-ProjectDirectory` はローカル Windows ドライブ上のディレクトリで、すべてのソースを含む必要があります。UNC パスや `\\wsl$` のパスには対応していません。
-- `.c` は C、`.C` / `.cc` / `.cpp` / `.cxx` / `.c++` は C++ として判定します。自動判定での C と C++ の混在はエラーになります。
-- 同じ言語の複数ソースには対応していますが、CMake/Make、混在言語ビルド、外部ライブラリのインストールは対象外です。
-- 引数をシェルのコードに埋め込まず、個別の引数として渡します。空白、引用符、空文字を含むプログラム引数を扱えます。
-
-コンパイルに失敗するとプログラムを実行せず、その終了コードを返します。成功時はプログラムの終了コードを返します。スクリプトの入力チェックエラーは `2`、WSL の実行エラーは CLI の終了コードを返します。
+Rust の呼び出し元は `SessionOptions` でキャッシュなどを指定し、`with_session` の範囲で `compile::Request` または汎用の `RunOptions` を実行します。アプリの設定ファイル、データセット、ソース構成には依存しません。`process` と `native` の補助は Windows と Linux の呼び出し元で利用できます。
 
 ## 検証
 
-WSL Containers が利用できる Windows の PowerShell 7 で実行してください。
-
-```powershell
-.\tests\Smoke.Tests.ps1
-
-# インストーラーの確認（ネットワーク・ユーザー PATH の変更なし）
-.\tests\Install.Tests.ps1
-
-# インストールしたスクリプトで実コンテナの検証も行う
-.\tests\Install.Tests.ps1 -RunSmokeTests
+```sh
+cargo test --workspace --locked
+cargo fmt --all -- --check
+cargo clippy --workspace --locked --all-targets -- -D warnings
 ```
 
-C23・C++23・C++26、複数ソース、インクルードパス、引用符を含む引数、空文字、日本語・空白を含むパス、読み取り専用マウント、終了コードの伝播を実際のコンテナで確認します。テスト用ファイルは無視対象の `.tmp/` に作り、終了時に削除します。テストはイメージ取得・コンテナ起動を行うため、ネットワーク接続とローカルディスクを使用する場合があります。
+実際の WSLC を使う統合テストは通常のテストから分離しています。
 
-動作確認環境：WSL 3.0.1、PowerShell 7.6.5、GCC 16.2.0。
+```sh
+cargo test --locked --package wslc-simple-gcc --test containers -- --ignored --test-threads 1
+```
+
+C23・C++23・C++26、複数ソース、インクルードパス、引用符・空文字・日本語の引数、読み取り専用マウント、終了コード、タイムアウト後のセッション解放、SDK キャッシュの修復を検証します。テストは新規の合成ソースとこのリポジトリのサンプルを使用します。`WSLC_GCC_TEST_CACHE` でテストのキャッシュを変更できます。
 
 ## ライセンス
 

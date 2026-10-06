@@ -1,0 +1,24 @@
+[package]
+name = "wslc-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Owned WSLC sessions, verified SDK caching and scoped process execution"
+include = ["Cargo.toml", "src/*.rs", "tests/*.rs"]
+
+[lints]
+workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_LibraryLoader", "Win32_System_Com", "Win32_Networking_WinHttp"] }
+sha2 = "0.10"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+serde_json = "1"
